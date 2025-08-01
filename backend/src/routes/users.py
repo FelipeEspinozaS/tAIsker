@@ -31,10 +31,7 @@ def ensure_user(request: Request, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_user)
   
-  return {
-    "id": db_user.id,
-    "week_starts_on_sunday": db_user.week_starts_on_sunday
-  }
+  return db_user
 
 # PATCH /users/me - Update the authenticated user's settings
 @router.patch("/me", response_model=UserSchema)
@@ -52,10 +49,7 @@ def update_user_week_start(
   db_user.week_starts_on_sunday = week_starts_on_sunday
   db.commit()
   db.refresh(db_user)
-  return {
-    "id": db_user.id,
-    "week_starts_on_sunday": db_user.week_starts_on_sunday
-  }
+  return db_user
 
 # GET /users/week_start_date
 @router.get("/week_start_date")

@@ -1,69 +1,52 @@
-from fastapi import APIRouter, Depends, Request, Query
-from typing import List
+from fastapi import APIRouter, Depends, Request, Body, Query
+from typing import List, Union
 from sqlalchemy import Session
 from src.utils.auth import authenticate_and_get_user_details
 from src.database.db import get_db
-from src.database.models import Week, AvailableSlot
-from src.schemas.available_slot import AvailableSlotSchema
+from src.database.models import AvailableSlot
+from src.schemas.available_slot import AvailableSlotSchema, AvailableSlotCreateSchema
 from datetime import date
 
 router = APIRouter(prefix="/available_slots", tags=["AvailableSlots"])
 
-# POST /available_slots - Create available slots for the current week
-@router.post("/", response_model=List[AvailableSlotSchema])
-def create_slots(
+# POST /available_slots - Create one or multiple available slots
+@router.post("/", response_model=Union[AvailableSlotSchema, List[AvailableSlotSchema]])
+def create_available_slots(
   request: Request,
-  slots: List[AvailableSlotSchema],
+  slots: Union[AvailableSlotSchema, List[AvailableSlotCreateSchema]] = Body(...),
   db: Session = Depends(get_db)):
 
   user = authenticate_and_get_user_details(request)
 
-  created_slots = []
+  slot_list = slots if isinstance(slots, list) else [slots]
+  created = []
 
-  for slot in slots:
-    # Ensure the week exists or create it if it doesn't
-    week = (db.query(Week)
-            .filter(Week.id == slot.week_id, Week.user_id == user["clerk_id"])
-            .first())
-    
-    if not week:
-      week = Week(
-        user_id = user["clerk_id"],
-        start_date = slot.start_date)
-      db.add(week)
-      db.commit()
-      db.refresh(week)
-    
+  for slot in slot_list:
     db_slot = AvailableSlot(
-      week_id=week.id,
-      weekday=slot.weekday,
+      user_id=user["clerk_id"],
+      date=slot.date,
       start_time=slot.start_time,
       end_time=slot.end_time
     )
     db.add(db_slot)
-    created_slots.append(db_slot)
+    db.commit()
+    db.refresh(db_slot)
+    created.append(db_slot)
 
-  db.commit()
-  return created_slots
+  return created if isinstance(slots, list) else created[0]
 
-# GET /available_slots - Get all available slots for the current week
+# GET /available_slots?date=YYYY-MM-DD - Get all available slots for that date
 @router.get("/", response_model=List[AvailableSlotSchema])
-def get_slots(
+def get_available_slots(
   request: Request,
-  start_date: date = Query(...),
+  date: date = Query(...),
   db: Session = Depends(get_db)):  
               
   user = authenticate_and_get_user_details(request)
 
-  week = (db.query(Week)
-          .filter(Week.user_id == user["clerk_id"], Week.start_date == start_date)
-          .first())
-  
-  if not week:
-    return []
-
-  slots = (db.query(AvailableSlot)
-           .filter(AvailableSlot.week_id == week.id)
-           .all())
+  slots = (db.query(AvailableSlot).filter(
+    AvailableSlot.user_id == user["clerk_id"],
+    AvailableSlot.date == date
+  ).all())
   
   return slots
