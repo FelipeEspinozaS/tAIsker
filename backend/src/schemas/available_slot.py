@@ -1,5 +1,11 @@
 from pydantic import BaseModel
-from database import time
+from database import time, date
+
+class AvailableSlotCreateSchema(BaseModel):
+  start_date: date
+  weekday: int  # 0 = Monday, 6 = Sunday
+  start_time: time
+  end_time: time
 
 class AvailableSlotSchema(BaseModel):
   id: int
